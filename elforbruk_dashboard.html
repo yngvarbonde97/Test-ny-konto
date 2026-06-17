@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Elforbruk Norge - SSB 14092</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f0f2f5; color: #1a1a2e; }
+
+    header { background: #003366; color: white; padding: 1.2rem 2rem; display: flex; align-items: baseline; gap: 1.5rem; }
+    header h1 { font-size: 1.35rem; font-weight: 600; }
+    header p { font-size: 0.82rem; opacity: 0.75; }
+
+    .layout { display: flex; min-height: calc(100vh - 58px); }
+
+    .sidebar {
+      width: 270px; flex-shrink: 0;
+      background: white; border-right: 1px solid #dde1e7;
+      padding: 1.2rem 1.2rem 2rem;
+      overflow-y: auto;
+    }
+    .sidebar h3 {
+      font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+      color: #777; font-weight: 700; margin-bottom: 0.5rem;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .sidebar h3 span { font-size: 0.7rem; color: #003366; cursor: pointer; text-decoration: underline; font-weight: 400; text-transform: none; letter-spacing: 0; }
+    .filter-group { margin-bottom: 1.2rem; }
+    .filter-group label { display: flex; align-items: center; gap: 0.45rem; font-size: 0.845rem; padding: 0.18rem 0; cursor: pointer; }
+    .filter-group input[type="checkbox"] { accent-color: #003366; }
+    .sub-item label { padding-left: 1rem; font-size: 0.78rem; color: #555; }
+    hr { border: none; border-top: 1px solid #eef0f3; margin: 1rem 0; }
+
+    .time-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
+    .time-row span { font-size: 0.75rem; color: #666; width: 24px; flex-shrink: 0; }
+    .time-row select { flex: 1; padding: 0.3rem 0.4rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.82rem; }
+
+    .main { flex: 1; padding: 1.3rem; overflow: auto; }
+
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 1rem; margin-bottom: 1.2rem; }
+    .kpi-card {
+      background: white; border-radius: 8px; padding: 1rem 1.2rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07); border-left: 4px solid #003366;
+    }
+    .kpi-card .kpi-label { font-size: 0.7rem; color: #888; text-transform: uppercase; letter-spacing: 0.04em; }
+    .kpi-card .kpi-value { font-size: 1.45rem; font-weight: 700; color: #003366; margin: 0.2rem 0 0.1rem; }
+    .kpi-card .kpi-sub { font-size: 0.72rem; color: #aaa; }
+
+    .card { background: white; border-radius: 8px; padding: 1.2rem; margin-bottom: 1.2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.07); }
+    .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.9rem; }
+    .card-header h2 { font-size: 0.95rem; font-weight: 600; color: #003366; }
+
+    .btn-group { display: flex; gap: 0.3rem; }
+    .btn { padding: 0.3rem 0.75rem; border: 1px solid #003366; border-radius: 4px; background: white; color: #003366; font-size: 0.78rem; cursor: pointer; }
+    .btn.active { background: #003366; color: white; }
+
+    .chart-wrap { position: relative; height: 340px; }
+    .chart-wrap-sm { position: relative; height: 240px; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; margin-bottom: 1.2rem; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    th { background: #f4f6f9; text-align: left; padding: 0.55rem 0.8rem; font-weight: 600; border-bottom: 2px solid #dde1e7; font-size: 0.73rem; text-transform: uppercase; letter-spacing: 0.03em; color: #555; }
+    td { padding: 0.45rem 0.8rem; border-bottom: 1px solid #eef0f3; }
+    tr:hover td { background: #fafbfc; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    #loading { text-align: center; padding: 5rem; color: #666; font-size: 1rem; }
+    #loading .spinner { width: 36px; height: 36px; border: 3px solid #dde1e7; border-top-color: #003366; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #err-box { text-align: center; padding: 3rem; color: #c0392b; }
+
+    @media (max-width: 800px) {
+      .layout { flex-direction: column; }
+      .sidebar { width: 100%; border-right: none; border-bottom: 1px solid #dde1e7; }
+      .two-col { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Forbruk av elektrisk kraft</h1>
+  <p>SSB Statistikkbanken - Tabell 14092 | MWh etter forbrukergruppe og prisomrade</p>
+</header>
+
+<div id="loading"><div class="spinner"></div>Laster data fra SSB...</div>
+<div id="err-box" style="display:none"></div>
+
+<div id="app" style="display:none" class="layout">
+
+  <aside class="sidebar">
+    <div class="filter-group">
+      <h3>Tidsperiode <span onclick="resetTime()">Tilbakestill</span></h3>
+      <div class="time-row">
+        <span>Fra</span>
+        <select id="fromYear" onchange="applyFilters()"></select>
+        <select id="fromMonth" onchange="applyFilters()"></select>
+      </div>
+      <div class="time-row">
+        <span>Til</span>
+        <select id="toYear" onchange="applyFilters()"></select>
+        <select id="toMonth" onchange="applyFilters()"></select>
+      </div>
+    </div>
+    <hr>
+    <div class="filter-group">
+      <h3>Prisomrade <span onclick="toggleAll('region', true)">Alle</span></h3>
+      <div id="regionFilters"></div>
+    </div>
+    <hr>
+    <div class="filter-group">
+      <h3>Forbrukergruppe <span onclick="toggleAll('group', true)">Alle</span></h3>
+      <div id="groupFilters"></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="summary-grid" id="kpiRow"></div>
+    <div class="card">
+      <div class="card-header">
+        <h2>Tidsutvikling</h2>
+        <div class="btn-group">
+          <button class="btn active" id="btn-region" onclick="setMode('region')">Pr. prisomrade</button>
+          <button class="btn" id="btn-group" onclick="setMode('group')">Pr. forbrukergruppe</button>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="lineChart"></canvas></div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-header"><h2 id="barTitle">Fordeling siste maned</h2></div>
+        <div class="chart-wrap-sm"><canvas id="barChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Arlig sammenlikning</h2></div>
+        <div class="chart-wrap-sm"><canvas id="yearChart"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h2>Datatabell <span id="tableNote" style="font-weight:400;font-size:0.8rem;color:#aaa"></span></h2></div>
+      <div style="overflow-x:auto" id="tableWrap"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+const API = 'https://data.ssb.no/api/pxwebapi/v2/tables/14092/data?lang=no&valueCodes[Forbrukargruppe]=*&valueCodes[Prisomraade]=*&valueCodes[Tid]=*';
+const REGIONS = [
+  {code:'NO',  label:'Norge (total)'},
+  {code:'NO1', label:'Sorost-Norge'},
+  {code:'NO2', label:'Sorvest-Norge'},
+  {code:'NO3', label:'Midt-Norge'},
+  {code:'NO4', label:'Nord-Norge'},
+  {code:'NO5', label:'Vest-Norge'}
+];
+const GROUPS = [
+  {code:'0',   label:'I alt',                    sub: false},
+  {code:'1',   label:'Primerneringer',            sub: false},
+  {code:'2',   label:'Sekundaerneringer',         sub: false},
+  {code:'2.1', label:'Bergverk og utvinning',     sub: true},
+  {code:'2.2', label:'Kraftintensiv industri',    sub: true},
+  {code:'2.3', label:'Industri utenom kraftint.', sub: true},
+  {code:'2.4', label:'Kraftforsyning m.m.',       sub: true},
+  {code:'3',   label:'Tertiaerneringer',          sub: false},
+  {code:'4',   label:'Husholdninger',             sub: false},
+  {code:'4.1', label:'Boliger',                   sub: true},
+  {code:'4.2', label:'Hytter og fritidshus',      sub: true}
+];
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
+const PALETTE = ['#003366','#e63946','#2a9d8f','#e9c46a','#f4a261','#457b9d','#6a4c93','#1982c4','#8ac926','#ff595e','#ffca3a'];
+
+let rawData = [], lineChart, barChart, yearChart, chartMode = 'region';
+
+async function fetchData() {
+  const res = await fetch(API);
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' fra SSB API');
+  return parseJsonStat2(await res.json());
+}
+
+function parseJsonStat2(js) {
+  const ids = js.id, sizes = js.size, dims = js.dimension, values = js.value;
+  const dimArrays = ids.map(id => {
+    const cat = dims[id].category;
+    return Object.keys(cat.index).sort((a,b) => cat.index[a]-cat.index[b]).map(c => ({code:c, label:cat.label[c]}));
+  });
+  const strides = new Array(ids.length);
+  strides[ids.length-1] = 1;
+  for (let i = ids.length-2; i >= 0; i--) strides[i] = strides[i+1]*sizes[i+1];
+  const rows = [];
+  for (let i = 0; i < values.length; i++) {
+    if (values[i] == null) continue;
+    let rem = i;
+    const combo = {};
+    for (let d = 0; d < ids.length; d++) { const idx = Math.floor(rem/strides[d]); rem %= strides[d]; combo[ids[d]] = dimArrays[d][idx]; }
+    rows.push({ groupCode: combo['Forbrukargruppe'].code, groupLabel: combo['Forbrukargruppe'].label, regionCode: combo['Prisomraade'].code, regionLabel: combo['Prisomraade'].label, month: combo['Tid'].code, value: values[i] });
+  }
+  return rows;
+}
+
+function uniqueSorted(arr) { return [...new Set(arr)].sort(); }
+function fmtMWh(v) { if (v>=1e9) return (v/1e9).toFixed(2)+' TWh'; if (v>=1e6) return (v/1e6).toFixed(2)+' GWh'; return v.toLocaleString('nb-NO')+' MWh'; }
+function fmtMonth(c) { return c.replace('M','/'); }
+function sum(arr) { return arr.reduce((s,r)=>s+r.value,0); }
+function selectedRegions() { return [...document.querySelectorAll('#regionFilters input:checked')].map(cb=>cb.value); }
+function selectedGroups()  { return [...document.querySelectorAll('#groupFilters input:checked')].map(cb=>cb.value); }
+function getFromCode() { return document.getElementById('fromYear').value+'M'+document.getElementById('fromMonth').value; }
+function getToCode()   { return document.getElementById('toYear').value+'M'+document.getElementById('toMonth').value; }
+
+function getFilteredData() {
+  const from=getFromCode(), to=getToCode(), regs=new Set(selectedRegions()), grps=new Set(selectedGroups());
+  return rawData.filter(r => r.month>=from && r.month<=to && regs.has(r.regionCode) && grps.has(r.groupCode));
+}
+
+function buildFilters() {
+  const months=uniqueSorted(rawData.map(r=>r.month)), years=uniqueSorted(months.map(m=>m.slice(0,4)));
+  const fromY=document.getElementById('fromYear'), toY=document.getElementById('toYear');
+  const fromM=document.getElementById('fromMonth'), toM=document.getElementById('toMonth');
+  years.forEach(y=>{fromY.add(new Option(y,y));toY.add(new Option(y,y));});
+  MONTH_NAMES.forEach((lbl,i)=>{const mo=String(i+1).padStart(2,'0');fromM.add(new Option(lbl,mo));toM.add(new Option(lbl,mo));});
+  fromY.value=years[0]; fromM.value='01'; toY.value=years[years.length-1]; toM.value=months[months.length-1].slice(5,7);
+  const rDiv=document.getElementById('regionFilters');
+  REGIONS.forEach(r=>{const lbl=document.createElement('label'),cb=document.createElement('input');cb.type='checkbox';cb.value=r.code;cb.checked=r.code!=='NO';cb.addEventListener('change',applyFilters);lbl.append(cb,r.label);rDiv.appendChild(lbl);});
+  const gDiv=document.getElementById('groupFilters');
+  GROUPS.forEach(g=>{const wrap=document.createElement('div');if(g.sub)wrap.className='sub-item';const lbl=document.createElement('label'),cb=document.createElement('input');cb.type='checkbox';cb.value=g.code;cb.checked=['1','2','3','4'].includes(g.code);cb.addEventListener('change',applyFilters);lbl.append(cb,g.label);wrap.appendChild(lbl);gDiv.appendChild(wrap);});
+}
+
+function updateKPIs(data) {
+  const months=uniqueSorted(data.map(r=>r.month)), latest=months[months.length-1], total=sum(data);
+  const latestSum=sum(data.filter(r=>r.month===latest)), avg=months.length?total/months.length:0;
+  document.getElementById('kpiRow').innerHTML=`
+    <div class="kpi-card"><div class="kpi-label">Totalt forbruk (valgt periode)</div><div class="kpi-value">${fmtMWh(total)}</div><div class="kpi-sub">${months.length} maneder</div></div>
+    <div class="kpi-card" style="border-color:#2a9d8f"><div class="kpi-label">Siste maned (${fmtMonth(latest)})</div><div class="kpi-value" style="color:#2a9d8f">${fmtMWh(latestSum)}</div><div class="kpi-sub">Alle valgte grupper og regioner</div></div>
+    <div class="kpi-card" style="border-color:#e9c46a"><div class="kpi-label">Gjennomsnitt pr. maned</div><div class="kpi-value" style="color:#b8860b">${fmtMWh(avg)}</div><div class="kpi-sub">I valgt periode</div></div>`;
+}
+
+function updateLineChart(data) {
+  const months=uniqueSorted(data.map(r=>r.month)), labels=months.map(fmtMonth);
+  let datasets;
+  if (chartMode==='region') {
+    datasets=REGIONS.filter(r=>selectedRegions().includes(r.code)).map((r,i)=>({
+      label:r.label, data:months.map(m=>{const s=data.filter(x=>x.month===m&&x.regionCode===r.code);return s.length?sum(s):null;}),
+      borderColor:PALETTE[i], backgroundColor:PALETTE[i]+'22', tension:0.35, pointRadius:2, borderWidth:2}));
+  } else {
+    datasets=GROUPS.filter(g=>selectedGroups().includes(g.code)).map((g,i)=>({
+      label:g.label, data:months.map(m=>{const s=data.filter(x=>x.month===m&&x.groupCode===g.code);return s.length?sum(s):null;}),
+      borderColor:PALETTE[i], backgroundColor:PALETTE[i]+'22', tension:0.35, pointRadius:2, borderWidth:2}));
+  }
+  if (lineChart) lineChart.destroy();
+  lineChart=new Chart(document.getElementById('lineChart'),{type:'line',data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11},padding:14}},tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+': '+(ctx.raw!=null?ctx.raw.toLocaleString('nb-NO')+' MWh':'Ingen data')}}},scales:{y:{beginAtZero:false,ticks:{callback:v=>v>=1e6?(v/1e6).toFixed(1)+' GWh':v.toLocaleString('nb-NO')}}}}})
+}
+
+function updateBarChart(data) {
+  const months=uniqueSorted(data.map(r=>r.month)), latest=months[months.length-1], lData=data.filter(r=>r.month===latest);
+  document.getElementById('barTitle').textContent='Fordeling '+fmtMonth(latest);
+  const regs=REGIONS.filter(r=>selectedRegions().includes(r.code)), grps=GROUPS.filter(g=>selectedGroups().includes(g.code));
+  const datasets=grps.map((g,i)=>({label:g.label,data:regs.map(r=>{const row=lData.find(d=>d.regionCode===r.code&&d.groupCode===g.code);return row?row.value:null;}),backgroundColor:PALETTE[i]+'cc'}));
+  if (barChart) barChart.destroy();
+  barChart=new Chart(document.getElementById('barChart'),{type:'bar',data:{labels:regs.map(r=>r.label),datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10},padding:10}},tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+': '+(ctx.raw!=null?ctx.raw.toLocaleString('nb-NO')+' MWh':'Ingen data')}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>v>=1e6?(v/1e6).toFixed(1)+' GWh':v.toLocaleString('nb-NO')}}}}});
+}
+
+function updateYearChart(data) {
+  const years=uniqueSorted(data.map(r=>r.month.slice(0,4))), regs=REGIONS.filter(r=>selectedRegions().includes(r.code));
+  const datasets=regs.map((r,i)=>({label:r.label,data:years.map(y=>{const s=data.filter(d=>d.month.startsWith(y)&&d.regionCode===r.code);return s.length?sum(s):null;}),backgroundColor:PALETTE[i]+'cc'}));
+  if (yearChart) yearChart.destroy();
+  yearChart=new Chart(document.getElementById('yearChart'),{type:'bar',data:{labels:years,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10},padding:10}},tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+': '+(ctx.raw!=null?fmtMWh(ctx.raw):'Ingen data')}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>v>=1e9?(v/1e9).toFixed(1)+' TWh':v>=1e6?(v/1e6).toFixed(1)+' GWh':v.toLocaleString('nb-NO')}}}}})
+}
+
+function updateTable(data) {
+  const months=uniqueSorted(data.map(r=>r.month)).reverse().slice(0,6);
+  const regs=REGIONS.filter(r=>selectedRegions().includes(r.code)), grps=GROUPS.filter(g=>selectedGroups().includes(g.code));
+  let rows=[];
+  for (const m of months) for (const r of regs) for (const g of grps) { const row=data.find(d=>d.month===m&&d.regionCode===r.code&&d.groupCode===g.code); if(row) rows.push(row); }
+  const truncated=rows.length>300; if(truncated) rows=rows.slice(0,300);
+  document.getElementById('tableNote').textContent=truncated?'(viser 300 nyeste rader - innsnevre filtrene for full visning)':'';
+  let html='<table><thead><tr><th>Maned</th><th>Prisomrade</th><th>Forbrukergruppe</th><th class="num">Forbruk (MWh)</th></tr></thead><tbody>';
+  for (const r of rows) html+=`<tr><td>${fmtMonth(r.month)}</td><td>${r.regionLabel}</td><td>${r.groupLabel}</td><td class="num">${r.value.toLocaleString('nb-NO')}</td></tr>`;
+  html+='</tbody></table>';
+  document.getElementById('tableWrap').innerHTML=html;
+}
+
+function applyFilters() { const data=getFilteredData(); if(!data.length) return; updateKPIs(data); updateLineChart(data); updateBarChart(data); updateYearChart(data); updateTable(data); }
+function setMode(mode) { chartMode=mode; document.getElementById('btn-region').classList.toggle('active',mode==='region'); document.getElementById('btn-group').classList.toggle('active',mode==='group'); applyFilters(); }
+function toggleAll(type,checked) { document.querySelectorAll(type==='region'?'#regionFilters input':'#groupFilters input').forEach(cb=>cb.checked=checked); applyFilters(); }
+function resetTime() { const months=uniqueSorted(rawData.map(r=>r.month)),years=uniqueSorted(months.map(m=>m.slice(0,4))); document.getElementById('fromYear').value=years[0];document.getElementById('fromMonth').value='01';document.getElementById('toYear').value=years[years.length-1];document.getElementById('toMonth').value=months[months.length-1].slice(5,7);applyFilters(); }
+
+async function init() {
+  try {
+    rawData=await fetchData();
+    document.getElementById('loading').style.display='none';
+    document.getElementById('app').style.display='flex';
+    buildFilters(); applyFilters();
+  } catch(e) {
+    document.getElementById('loading').style.display='none';
+    const box=document.getElementById('err-box'); box.style.display='block';
+    box.innerHTML='<strong>Feil ved lasting av data fra SSB</strong><br>'+e.message+'<br><br><small>Kontroller nettverkstilgang og at SSB API er tilgjengelig.</small>';
+    console.error(e);
+  }
+}
+init();
+</script>
+</body>
+</html>
