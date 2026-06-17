@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Elforbruk Norge - SSB 14092</title>
+</head>
+<body>
+
+  <header>
+    <h1>Forbruk av elektrisk kraft</h1>
+    <p>SSB Statistikkbanken &ndash; Tabell 14092 | MWh etter forbrukergruppe og prisomrade</p>
+  </header>
+
+  <div id="loading">
+    <div class="spinner"></div>
+    Laster data fra SSB&hellip;
+  </div>
+
+  <div id="err-box" hidden></div>
+
+  <div id="app" hidden class="layout">
+
+    <aside class="sidebar">
+
+      <div class="filter-group">
+        <h3>Tidsperiode <span id="reset-time">Tilbakestill</span></h3>
+        <div class="time-row">
+          <span>Fra</span>
+          <select id="fromYear"></select>
+          <select id="fromMonth"></select>
+        </div>
+        <div class="time-row">
+          <span>Til</span>
+          <select id="toYear"></select>
+          <select id="toMonth"></select>
+        </div>
+      </div>
+
+      <hr />
+
+      <div class="filter-group">
+        <h3>Prisomrade <span id="select-all-regions">Alle</span></h3>
+        <div id="regionFilters"></div>
+      </div>
+
+      <hr />
+
+      <div class="filter-group">
+        <h3>Forbrukergruppe <span id="select-all-groups">Alle</span></h3>
+        <div id="groupFilters"></div>
+      </div>
+
+    </aside>
+
+    <main>
+
+      <div class="kpi-row" id="kpiRow"></div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Tidsutvikling</h2>
+          <div class="btn-group">
+            <button class="btn active" id="btn-region">Pr. prisomrade</button>
+            <button class="btn" id="btn-group">Pr. forbrukergruppe</button>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="lineChart"></canvas></div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header"><h2 id="barTitle">Fordeling siste maned</h2></div>
+          <div class="chart-wrap-sm"><canvas id="barChart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>Arlig sammenlikning</h2></div>
+          <div class="chart-wrap-sm"><canvas id="yearChart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Datatabell</h2>
+          <span id="tableNote"></span>
+        </div>
+        <div id="tableWrap"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
